@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#05070b">
+<title>LUMEN — Prototype v0.3.2</title>
+<style>
+  :root{
+    --bg:#0a0d13; --frame:#12161f; --wall:#1e2534; --wall-edge:#2c3650;
+    --tile:#232b3d; --dug:#141926; --ink:#e8e4d8; --dim:#8a93a4;
+    --gold:#f2b632; --teal:#4fd6c2; --rose:#e86a7a; --line:#2a3242;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+  html{height:100%}
+  /* position:fixed body = the only reliable scroll lock on iOS Safari */
+  body{margin:0;position:fixed;inset:0;width:100%;height:100%;background:#05070b;
+    font:15px/1.4 'Segoe UI',system-ui,sans-serif;color:var(--ink);overflow:hidden;overscroll-behavior:none}
+  button{touch-action:manipulation}
+  #jsbadge{position:fixed;bottom:2px;left:4px;z-index:99;font-size:.6rem;color:#e86a7a;opacity:.8}
+  #jsbadge.ok{color:#4fd6c2}
+  #phone{position:relative;width:min(100vw,420px);height:100%;max-height:900px;margin:0 auto;background:var(--bg);
+    display:flex;flex-direction:column;overflow:hidden;border-left:1px solid #131824;border-right:1px solid #131824}
+
+  #hud{display:flex;align-items:center;gap:12px;padding:10px 16px 6px;font-size:.85rem;color:var(--dim)}
+  #hud .spacer{flex:1}
+  .stat{display:flex;align-items:center;gap:5px}
+  .stat b{color:var(--ink)}
+  #stambar{height:8px;margin:0 16px 6px;background:#1a2130;border-radius:6px;overflow:hidden}
+  #stamfill{height:100%;width:100%;background:linear-gradient(90deg,#e86a7a,#f2b632);border-radius:6px;transition:width .25s}
+
+  #top{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:12px;min-height:0;flex-direction:column;gap:8px;overflow:hidden}
+
+  /* run room */
+  #room{position:relative;background:var(--wall);border:6px solid var(--wall-edge);border-radius:14px;padding:10px;
+    box-shadow:0 0 40px #000 inset, 0 6px 30px #00000088}
+  #grid{display:grid;gap:3px;position:relative}
+  .tile{width:var(--ts);height:var(--ts);border-radius:5px;background:var(--tile);position:relative;
+    display:flex;align-items:center;justify-content:center;font-size:calc(var(--ts)*.5);touch-action:manipulation;
+    box-shadow:0 2px 0 #00000055 inset, 0 -1px 0 #ffffff0c inset;transition:background .15s}
+  .tile.breakable{background:#2a3346;box-shadow:0 0 0 1px #f2b63233 inset, 0 2px 0 #00000055 inset;cursor:pointer}
+  .tile.breakable:active{transform:scale(.94)}
+  .tile.dug{background:var(--dug);box-shadow:0 3px 8px #000 inset}
+  .tile.blocked{background:#0d1118;box-shadow:none;border-radius:2px}
+  .tile.hard::after{content:"";position:absolute;inset:20%;border:2px solid #ffffff18;border-radius:4px}
+  .tile .glint{opacity:.85;filter:drop-shadow(0 0 4px #4fd6c2aa);font-size:calc(var(--ts)*.42)}
+  .tile .loot-chip{font-size:calc(var(--ts)*.44);filter:drop-shadow(0 0 5px #f2b632aa);cursor:pointer;animation:bob 1.2s infinite ease-in-out}
+  @keyframes bob{50%{transform:translateY(-3px)}}
+  #player{position:absolute;font-size:calc(var(--ts)*.62);z-index:5;pointer-events:none;transition:left .2s,top .2s;
+    filter:drop-shadow(0 0 8px #f2b632cc)}
+  .burst{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:calc(var(--ts)*.9);
+    animation:burst .7s ease-out forwards;pointer-events:none;z-index:6}
+  @keyframes burst{0%{transform:scale(.3);opacity:1}100%{transform:scale(2.2);opacity:0}}
+  .door{position:absolute;z-index:8;background:#0e1420;border:2px solid var(--gold);color:var(--gold);
+    border-radius:10px;padding:6px 12px;font-size:1.15rem;cursor:pointer;box-shadow:0 0 18px #f2b63266;
+    animation:doorglow 1.6s infinite alternate}
+  @keyframes doorglow{from{box-shadow:0 0 8px #f2b63244}to{box-shadow:0 0 22px #f2b632aa}}
+  .door.up{top:-22px;left:50%;transform:translateX(-50%)}
+  .door.down{bottom:-22px;left:50%;transform:translateX(-50%)}
+  .door.left{left:-22px;top:50%;transform:translateY(-50%)}
+  .door.right{right:-22px;top:50%;transform:translateY(-50%)}
+  #exitrope{position:absolute;bottom:10px;right:12px;z-index:9;background:#0e1420;border:1px solid var(--line);
+    color:var(--dim);border-radius:10px;padding:6px 12px;font-size:.8rem;cursor:pointer}
+  #vignette{position:absolute;inset:0;pointer-events:none;z-index:7;opacity:0;transition:opacity .4s;
+    background:radial-gradient(ellipse at center, transparent 30%, #000 95%)}
+
+  /* panels shared */
+  .panel{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;height:100%;justify-content:center}
+  .ptitle{color:var(--gold);font-size:1.05rem;letter-spacing:.08em}
+  .psub{color:var(--dim);font-size:.75rem;margin-top:-4px;text-align:center;max-width:340px;min-height:1.1em}
+
+  /* big light bar */
+  #lightbarwrap{width:86%;max-width:330px}
+  #lightbarlabel{display:flex;justify-content:space-between;font-size:.72rem;color:var(--dim);margin-bottom:3px}
+  #lightbarlabel b{color:var(--gold)}
+  #lightbar{height:16px;background:#1a2130;border:1px solid #f2b63244;border-radius:10px;overflow:hidden;position:relative}
+  #lightfill{height:100%;width:0%;background:linear-gradient(90deg,#8a6a12,#f2b632,#ffe9a8);border-radius:10px;
+    transition:width .6s;box-shadow:0 0 14px #f2b632aa}
+
+  /* city board + districts */
+  #citywrap{position:relative}
+  #cityboard{display:grid;grid-template-columns:repeat(6,48px);gap:4px;background:#07090f;padding:8px;border-radius:14px;border:1px solid var(--line)}
+  .ct{width:48px;height:48px;border-radius:7px;background:#0a0d14;display:flex;align-items:center;justify-content:center;
+    font-size:1.4rem;position:relative;transition:background .6s, box-shadow .6s}
+  .ct.lit{background:#2b2413;box-shadow:0 0 14px #f2b63222 inset}
+  .ct.placeable{outline:2px dashed var(--teal);cursor:pointer;animation:doorglow 1.4s infinite alternate}
+  .ct .b{filter:drop-shadow(0 0 6px #f2b63288)}
+  .dlabel{position:absolute;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:#05070bd8;border:1px dashed #3a4356;border-radius:10px;cursor:pointer;padding:2px;text-align:center;transition:border-color .2s}
+  .dlabel .dn{font-size:.62rem;color:var(--dim);letter-spacing:.04em}
+  .dlabel .dc{font-size:.72rem;color:var(--gold);font-weight:700}
+  .dlabel.affordable{border-color:var(--gold);box-shadow:0 0 14px #f2b63244;animation:doorglow 1.6s infinite alternate}
+  #citybtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  .cbtn{background:#0e1420;border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:9px 13px;
+    font-size:.82rem;cursor:pointer;font-family:inherit}
+  .cbtn.primary{background:var(--gold);color:#1a1408;border-color:var(--gold);font-weight:700}
+  .cbtn.active{border-color:var(--teal);color:var(--teal)}
+  .cbtn:disabled{opacity:.4}
+
+  /* shop */
+  #shoppanel{justify-content:flex-start;padding-top:4px;overflow:hidden}
+  #buyrow{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+  .buybtn{background:#0e1420;border:1px solid var(--line);border-radius:10px;padding:5px 8px;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;font-size:1.05rem;min-width:58px}
+  .buybtn small{font-size:.58rem;color:var(--dim)}
+  .buybtn .cost{font-size:.62rem;color:var(--gold);font-weight:700}
+  .buybtn:disabled{opacity:.4}
+  #shopboard{display:grid;grid-template-columns:repeat(4,42px);gap:4px;background:#07090f;padding:7px;border-radius:12px;border:1px solid var(--line)}
+  #shopboard .slot{width:42px;height:42px;aspect-ratio:auto}
+  #effects{font-size:.66rem;color:var(--teal);text-align:center;letter-spacing:.03em}
+  #orders{display:flex;flex-direction:column;gap:6px;width:92%;max-width:350px;overflow-y:auto;flex:1;min-height:60px}
+  .order{background:#0e1420;border:1px solid var(--line);border-radius:12px;padding:7px 10px;transition:border-color .2s}
+  .order.ready{border-color:var(--gold);box-shadow:0 0 12px #f2b63333;cursor:pointer}
+  .orow{display:flex;align-items:center;gap:8px}
+  .order .cust{font-size:1.4rem}
+  .order .wants{font-size:.6rem;color:var(--dim);letter-spacing:.06em}
+  .order .reqs{flex:1;display:flex;gap:8px;align-items:center;font-size:1rem;flex-wrap:wrap}
+  .req{display:flex;align-items:center;gap:2px}
+  .req .hv{font-size:.62rem;font-weight:700}
+  .req.ok .hv{color:var(--teal)} .req.no .hv{color:var(--rose)}
+  .req.no{opacity:.6}
+  .order .pay{color:var(--gold);font-weight:700;font-size:.85rem;white-space:nowrap}
+  .deliver{margin-top:5px;text-align:center;font-size:.68rem;color:#1a1408;background:var(--gold);border-radius:8px;
+    padding:3px;font-weight:700;letter-spacing:.1em}
+  #till{width:92%;max-width:350px;height:40px;border:2px dashed #f2b63255;border-radius:12px;display:flex;align-items:center;
+    justify-content:center;color:var(--gold);font-size:.72rem;letter-spacing:.08em;flex-shrink:0}
+  #till.drag-over{background:#f2b63218;border-color:var(--gold)}
+
+  /* BAG */
+  #bagzone{background:var(--frame);border-top:1px solid var(--line);padding:8px 14px 10px;position:relative}
+  #bagrow{display:flex;gap:10px;align-items:flex-start;justify-content:center}
+  #bag{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;flex:1;max-width:280px}
+  .slot{aspect-ratio:1;background:#0e1320;border:1px solid #232c3f;border-radius:8px;position:relative;
+    display:flex;align-items:center;justify-content:center}
+  .slot.lantern-slot{border-color:#f2b63255;background:#151306}
+  .slot.drag-over{border-color:var(--teal);box-shadow:0 0 8px #4fd6c266}
+  .chip{touch-action:none;width:88%;height:88%;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    font-size:1.25rem;cursor:grab;position:relative;background:#1c2334;box-shadow:0 2px 4px #00000066}
+  .chip.t2{background:#24304a}.chip.t3{background:#2d3d60;box-shadow:0 0 8px #4fd6c244}
+  .chip.t4{background:#3b3260;box-shadow:0 0 10px #b48ef266}.chip.t5{background:#54407a;box-shadow:0 0 12px #d2a8ff88}
+  .chip.light-chip{background:#3d3210;box-shadow:0 0 10px #f2b63288}
+  .chip.shop-chip{background:#13282a;box-shadow:0 0 8px #4fd6c244}
+  .chip .cnt{position:absolute;bottom:0;right:3px;font-size:.6rem;color:var(--gold);font-weight:700;text-shadow:0 1px 2px #000}
+  #lanternbox{display:flex;flex-direction:column;gap:5px;align-items:center}
+  #lanternbox .lab{font-size:.62rem;color:var(--gold);letter-spacing:.08em}
+  #lantern{display:grid;grid-template-columns:repeat(2,44px);gap:5px}
+  #lantern .slot{width:44px;height:44px}
+  #gutter{margin:7px auto 0;max-width:390px;height:22px;border:1px dashed #444d63;border-radius:8px;display:flex;
+    align-items:center;justify-content:center;font-size:.65rem;color:var(--dim);letter-spacing:.1em}
+  #gutter.drag-over{border-color:var(--rose);color:var(--rose);background:#e86a7a11}
+  #dragghost{position:fixed;z-index:100;pointer-events:none;font-size:1.5rem;filter:drop-shadow(0 2px 8px #000);display:none}
+
+  .overlay{position:absolute;inset:0;background:#05070bee;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:30px;gap:14px}
+  .overlay h2{color:var(--gold);margin:0;font-size:1.5rem}
+  .overlay p{color:var(--dim);margin:0;max-width:300px}
+  .btn{background:var(--gold);color:#1a1408;border:none;border-radius:12px;padding:12px 26px;font-size:1rem;
+    font-weight:700;cursor:pointer;font-family:inherit}
+  .btn.ghost{background:transparent;color:var(--dim);border:1px solid var(--line)}
+  .btn:active{transform:scale(.96)}
+  .tallyrow{display:flex;justify-content:space-between;width:250px;font-size:.95rem;color:var(--ink)}
+  .tallyrow b{color:var(--gold)}
+  #toast{position:absolute;top:64px;left:50%;transform:translateX(-50%);background:#0e1420ee;border:1px solid var(--gold);
+    color:var(--gold);padding:8px 18px;border-radius:20px;font-size:.85rem;z-index:30;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+  #undo{position:absolute;bottom:110px;left:50%;transform:translateX(-50%);z-index:30;background:#0e1420ee;
+    border:1px solid var(--rose);color:var(--rose);padding:6px 16px;border-radius:18px;font-size:.8rem;cursor:pointer;display:none}
+</style>
+</head>
+<body>
+<div id="jsbadge">v0.3.2 js:✗</div>
+<div id="phone">
+  <div id="hud">
+    <div class="stat">✨ <b id="hudlight">0</b></div>
+    <div class="stat">🪙 <b id="hudcoins">0</b></div>
+    <div class="stat">🧑 <b id="hudcitizens">0</b></div>
+    <div class="spacer"></div>
+    <div class="stat" id="huddepth"></div>
+  </div>
+  <div id="stambar" style="display:none"><div id="stamfill"></div></div>
+
+  <div id="top">
+    <!-- RUN -->
+    <div id="room" style="display:none">
+      <div id="grid"></div>
+      <div id="player">🕯️</div>
+      <div id="vignette"></div>
+    </div>
+    <div id="exitrope" style="display:none">🪢 leave run</div>
+
+    <!-- CITY -->
+    <div id="citypanel" class="panel">
+      <div class="ptitle">THE CITY</div>
+      <div id="lightbarwrap">
+        <div id="lightbarlabel"><span>LIGHT</span><span id="lightbartext"><b>0</b></span></div>
+        <div id="lightbar"><div id="lightfill"></div></div>
+      </div>
+      <div id="citywrap">
+        <div id="cityboard"></div>
+      </div>
+      <div class="psub" id="citysub"></div>
+      <div id="citybtns">
+        <button class="cbtn" id="housebtn">🏠 House <span style="color:var(--gold)">60🪙</span></button>
+        <button class="cbtn" id="shopbtn">🛍 Shop</button>
+        <button class="cbtn primary" id="minebtn">⛏ Enter the Mine</button>
+      </div>
+    </div>
+
+    <!-- SHOP -->
+    <div id="shoppanel" class="panel" style="display:none">
+      <div class="ptitle">YOUR SHOP</div>
+      <div id="buyrow"></div>
+      <div id="shopboard"></div>
+      <div id="effects"></div>
+      <div id="orders"></div>
+      <div id="till">— drag an item here to sell —</div>
+      <button class="cbtn" id="backbtn" style="flex-shrink:0">← Back to the city</button>
+    </div>
+  </div>
+
+  <div id="bagzone">
+    <div id="bagrow">
+      <div id="bag"></div>
+      <div id="lanternbox"><div class="lab">LANTERN</div><div id="lantern"></div></div>
+    </div>
+    <div id="gutter">— drag here to toss to the dark —</div>
+  </div>
+
+  <div id="toast"></div>
+  <button id="undo">undo toss</button>
+  <div id="dragghost"></div>
+
+  <div class="overlay" id="intro">
+    <h2>LUMEN</h2>
+    <p>Light has left the city. Mine it back, merge what you find, sell it, and reawaken the districts one by one.</p>
+    <p style="font-size:.78rem">In the mine: dig tiles next to your tunnel. One plain tile hides the light vein — no hints. Faint and unmerged materials are lost. Light rides only in your lantern; tap a ×3 stack to merge it and carry more.</p>
+    <button class="btn" id="introbtn">Begin</button>
+  </div>
+
+  <div class="overlay" id="shaftscreen" style="display:none">
+    <h2>⛓ Descent Shaft</h2>
+    <p>A camp flickers by the shaft. The dark below is richer… and harsher.</p>
+    <button class="btn" id="descendbtn">⬇ Descend (Band 2)</button>
+    <button class="btn ghost" id="flaskbtn">🧪 Buy flask +12 stamina (20🪙)</button>
+    <button class="btn ghost" id="bankbtn">🪢 Bank &amp; leave</button>
+  </div>
+
+  <div class="overlay" id="tallyscreen" style="display:none">
+    <h2 id="tallytitle">Back to the surface</h2>
+    <p id="tallysub"></p>
+    <div class="tallyrow"><span>Light banked</span><b id="tlight">0 ✨</b></div>
+    <div class="tallyrow"><span>Citizens' gifts</span><b id="tgift">0 🪙</b></div>
+    <div class="tallyrow"><span>Deepest floor</span><b id="tdepth">1</b></div>
+    <p style="font-size:.75rem">Your haul stays in the bag — sell it at the shop.</p>
+    <button class="btn" id="homebtn">🏙 Return to the city</button>
+  </div>
+
+  <div class="overlay" id="winscreen" style="display:none">
+    <h2>☀️ The city glows again</h2>
+    <p id="winsub"></p>
+    <p style="font-size:.8rem;color:var(--gold)">Every district shines. The dark kept nothing.</p>
+    <button class="btn" id="winbtn">Keep playing</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================= DATA ================= */
+const CHAINS = {
+  pebble:{names:["Pebble","Brick","Pillar","Monument","Spire"], icons:["🪨","🧱","🏛️","🗿","🗼"], values:[1,4,14,50,180]},
+  crystal:{names:["Crystal","Gem","Crown Jewel"], icons:["🔮","💎","👑"], values:[5,18,65]},
+  ore:{names:["Ore","Ingot","Blade"], icons:["⚙️","🔩","⚔️"], values:[4,14,50]},
+  light:{names:["Shard","Mote","Gleam"], icons:["✨","🌟","💫"], values:[1,3,9]},
+  /* shop upgrade chains — bought, placed on the shop board, merged 3→1 */
+  sign:{shop:true, cost:25, effect:"payout", names:["Sign","Fancy Sign","Famous Sign"], icons:["🪧","🎏","🎇"], values:[0,0,0]},
+  bell:{shop:true, cost:35, effect:"orders", names:["Bell","Chime","Grand Horn"], icons:["🛎️","🔔","📯"], values:[0,0,0]},
+  toolkit:{shop:true, cost:45, effect:"bag", names:["Toolkit","Workbench","Warehouse"], icons:["🧰","🪚","🏗️"], values:[0,0,0]},
+  candle:{shop:true, cost:55, effect:"lantern", names:["Candle","Oil Lamp","Great Lantern"], icons:["🕯️","🪔","🏮"], values:[0,0,0]},
+};
+const SHOP_KEYS=["sign","bell","toolkit","candle"];
+const EFFECT_HINT={sign:"+15% order pay / tier", bell:"+1 order slot / tier", toolkit:"+2 bag slots / tier", candle:"+1 lantern slot / tier"};
+const CUSTOMERS=["👵","🧑‍🌾","🧙","👦","🎻","🐈"];
+const ORDER_POOL=[
+  {req:[{c:"pebble",t:1,n:3}],pay:8},
+  {req:[{c:"crystal",t:1,n:1}],pay:9},
+  {req:[{c:"ore",t:1,n:2}],pay:14},
+  {req:[{c:"pebble",t:2,n:1}],pay:18},
+  {req:[{c:"pebble",t:2,n:1},{c:"crystal",t:1,n:1}],pay:30},
+  {req:[{c:"crystal",t:2,n:1}],pay:45},
+  {req:[{c:"ore",t:2,n:1}],pay:38},
+  {req:[{c:"pebble",t:3,n:1}],pay:55},
+  {req:[{c:"ore",t:2,n:1},{c:"pebble",t:2,n:1}],pay:70},
+];
+const BOONS = [
+  {id:"coins", icon:"💰", apply:()=>{const c=15+Math.floor(Math.random()*26); meta.coins+=c; toast("Boon: +"+c+" coins 💰");}},
+  {id:"flask", icon:"🧪", apply:()=>{run.stam=Math.min(run.maxStam,run.stam+14); toast("Boon: +14 stamina 🧪");}},
+  {id:"rare", icon:"💎", apply:()=>{const t=Math.random()<.5?"crystal":"ore"; addLoot(t,2); toast("Boon: a rare find 💎");}},
+  {id:"grotto", icon:"🌟", apply:()=>{run.grotto=true; toast("A Glimmer Grotto! Three veins hide here 🌟");}},
+];
+const seenBoons=new Set();
+
+/* districts on a 6x5 board (idx=y*6+x) */
+const CW=6, CH=5, GATE=27;
+const DISTRICTS=[
+  {name:"Gate Plaza", cost:0, tiles:[14,15,20,21,26,27]},
+  {name:"Old Market", cost:15, tiles:[12,13,18,19,24,25]},
+  {name:"Lamplighters Row", cost:30, tiles:[16,17,22,23,28,29]},
+  {name:"Artisan Terrace", cost:60, tiles:[0,1,2,6,7,8]},
+  {name:"Cathedral of Dawn", cost:100, tiles:[3,4,5,9,10,11]},
+];
+
+/* ================= STATE ================= */
+const meta={light:0, coins:0, citizens:0, runs:0, unlocked:new Set([0]), buildings:{}};
+meta.buildings[GATE]="gate";
+let run=null;
+let bag=Array(12).fill(null);
+let lantern=Array(2).fill(null);
+let shopboard=Array(12).fill(null);
+let floorLoot={};
+let orders=[];
+let buildMode=null;
+let screen="city";
+let won=false;
+
+const $=id=>document.getElementById(id);
+const gridEl=$("grid"), roomEl=$("room"), playerEl=$("player");
+
+/* robust mobile-safe tap binding: pointerup, touchend, and click — first one wins, never doubles */
+function tap(el,fn){
+  let lock=false;
+  const fire=e=>{
+    if(lock) return;
+    lock=true; setTimeout(()=>lock=false,450);
+    fn(e);
+  };
+  el.addEventListener("pointerup",e=>{e.preventDefault();fire(e);});
+  el.addEventListener("touchend",e=>{e.preventDefault();fire(e);},{passive:false});
+  el.addEventListener("click",fire);
+}
+/* iOS: block rubber-band page scrolling everywhere except the orders list */
+document.addEventListener("touchmove",e=>{
+  if(!e.target.closest||!e.target.closest("#orders")) e.preventDefault();
+},{passive:false});
+/* prove JS is alive on this device */
+document.getElementById("jsbadge").textContent="v0.3.2 js:✓";
+document.getElementById("jsbadge").classList.add("ok");
+/* surface any runtime error on screen (mobile debugging) */
+window.addEventListener("error",e=>{
+  try{const t=document.getElementById("toast");t.textContent="⚠ "+e.message;t.style.opacity=1;}catch(_){}
+});
+
+/* ================= SHOP EFFECTS ================= */
+function maxTier(chain){
+  let m=0; shopboard.forEach(it=>{if(it&&it.chain===chain) m=Math.max(m,it.tier);});
+  return m;
+}
+function bagSize(){return 12+2*maxTier("toolkit");}
+function lanternSize(){return 2+maxTier("candle");}
+function orderSlots(){return 2+maxTier("bell");}
+function payoutMult(){return 1+0.15*maxTier("sign");}
+function applySizes(){
+  while(bag.length<bagSize()) bag.push(null);
+  while(lantern.length<lanternSize()) lantern.push(null);
+}
+
+/* ================= SCREENS ================= */
+function showScreen(s){
+  screen=s;
+  $("room").style.display=s==="run"?"block":"none";
+  $("citypanel").style.display=s==="city"?"flex":"none";
+  $("shoppanel").style.display=s==="shop"?"flex":"none";
+  $("stambar").style.display=s==="run"?"block":"none";
+  $("exitrope").style.display="none";
+  $("huddepth").textContent=s==="run"?("Floor "+run.floor+(run.band>1?" · Band "+run.band:"")):(s==="shop"?"🛍":"🏙");
+  if(s==="city") renderCityBoard();
+  if(s==="shop"){renderShop();}
+  updateHUD();
+}
+
+/* ================= CITY ================= */
+function tileUnlocked(i){
+  return DISTRICTS.some((d,di)=>meta.unlocked.has(di)&&d.tiles.includes(i));
+}
+function nextCheapest(){
+  let best=null;
+  DISTRICTS.forEach((d,di)=>{
+    if(!meta.unlocked.has(di)&&(best===null||d.cost<DISTRICTS[best].cost)) best=di;
+  });
+  return best;
+}
+function renderLightBar(){
+  const nb=nextCheapest();
+  if(nb===null){
+    $("lightbartext").innerHTML="<b>"+meta.light+" ✨</b> — the whole city shines";
+    $("lightfill").style.width="100%";
+  } else {
+    const cost=DISTRICTS[nb].cost;
+    $("lightbartext").innerHTML="<b>"+meta.light+"</b> / "+cost+" ✨ — next: "+DISTRICTS[nb].name;
+    $("lightfill").style.width=Math.min(100,meta.light/cost*100)+"%";
+  }
+}
+function renderCityBoard(){
+  renderLightBar();
+  const el=$("cityboard"); el.innerHTML="";
+  meta.city_cells=[];
+  meta.cityRects={};
+  for(let i=0;i<CW*CH;i++){
+    const d=document.createElement("div");
+    const unlocked=tileUnlocked(i);
+    d.className="ct"+(unlocked?" lit":"");
+    const b=meta.buildings[i];
+    if(b==="gate") d.innerHTML='<span class="b">⛩️</span>';
+    if(b==="house") d.innerHTML='<span class="b">🏠</span>';
+    if(buildMode==="house"&&unlocked&&!b){d.classList.add("placeable"); tap(d,()=>placeHouse(i));}
+    el.appendChild(d);
+  }
+  // district labels over locked regions
+  document.querySelectorAll(".dlabel").forEach(l=>l.remove());
+  const wrap=$("citywrap");
+  DISTRICTS.forEach((dst,di)=>{
+    if(meta.unlocked.has(di)) return;
+    const xs=dst.tiles.map(i=>i%CW), ys=dst.tiles.map(i=>Math.floor(i/CW));
+    const x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys), y1=Math.max(...ys);
+    const cell=52; // 48 + 4 gap
+    const lab=document.createElement("div");
+    lab.className="dlabel"+(meta.light>=dst.cost?" affordable":"");
+    lab.style.left=(8+x0*cell)+"px";
+    lab.style.top=(8+y0*cell)+"px";
+    lab.style.width=((x1-x0+1)*cell-4)+"px";
+    lab.style.height=((y1-y0+1)*cell-4)+"px";
+    lab.innerHTML=`<span class="dn">🔒 ${dst.name}</span><span class="dc">${dst.cost} ✨</span>`;
+    tap(lab,()=>unlockDistrict(di));
+    wrap.appendChild(lab);
+  });
+  $("housebtn").classList.toggle("active",buildMode==="house");
+  $("housebtn").disabled=meta.coins<60;
+  $("citysub").textContent = buildMode==="house"
+    ? "Tap glowing ground to build. Each house brings one citizen home."
+    : meta.citizens>0
+      ? meta.citizens+" citizen"+(meta.citizens>1?"s":"")+" home — they gift you "+(2*meta.citizens)+"🪙 after every run."
+      : "Unlock districts with light. Houses bring citizens — citizens gift coins after every run.";
+}
+function unlockDistrict(di){
+  const d=DISTRICTS[di];
+  if(meta.light<d.cost){toast("Needs "+d.cost+" ✨ — you have "+meta.light);return;}
+  meta.light-=d.cost;
+  meta.unlocked.add(di);
+  toast("☀️ "+d.name+" awakens!");
+  renderCityBoard(); updateHUD();
+  if(!won&&meta.unlocked.size===DISTRICTS.length){
+    won=true;
+    $("winsub").textContent="Rebuilt in "+meta.runs+" runs, with "+meta.citizens+" citizens home.";
+    setTimeout(()=>$("winscreen").style.display="flex",700);
+  }
+}
+function placeHouse(i){
+  if(meta.coins<60) return;
+  meta.coins-=60; meta.citizens++;
+  meta.buildings[i]="house";
+  buildMode=null; toast("A citizen returns home 🧑"); renderCityBoard(); updateHUD();
+}
+tap($("housebtn"),()=>{buildMode=buildMode==="house"?null:"house"; renderCityBoard();});
+tap($("shopbtn"),()=>{buildMode=null; showScreen("shop");});
+tap($("backbtn"),()=>showScreen("city"));
+tap($("minebtn"),()=>{buildMode=null; newRun();});
+tap($("winbtn"),()=>$("winscreen").style.display="none");
+
+/* ================= SHOP ================= */
+function renderShop(){renderBuyRow(); renderShopBoard(); renderEffects(); renderOrders();}
+function renderBuyRow(){
+  const el=$("buyrow"); el.innerHTML="";
+  SHOP_KEYS.forEach(k=>{
+    const ch=CHAINS[k];
+    const b=document.createElement("button");
+    b.className="buybtn";
+    b.disabled=meta.coins<ch.cost;
+    b.innerHTML=`${ch.icons[0]}<small>${EFFECT_HINT[k]}</small><span class="cost">${ch.cost}🪙</span>`;
+    tap(b,()=>{
+      const si=shopboard.findIndex(s=>s===null);
+      if(si<0){toast("Shop board full — merge things");return;}
+      if(meta.coins<ch.cost) return;
+      meta.coins-=ch.cost;
+      shopboard[si]={chain:k,tier:1,count:1};
+      toast(ch.names[0]+" placed — buy 3 and merge!");
+      renderBag(); renderShop(); updateHUD();
+    });
+    el.appendChild(b);
+  });
+}
+function renderShopBoard(){
+  const el=$("shopboard"); el.innerHTML="";
+  shopboard.forEach((it,i)=>{
+    const s=document.createElement("div");s.className="slot";s.dataset.zone="shopboard";s.dataset.idx=i;
+    if(it) s.innerHTML=chipHTML(it);
+    el.appendChild(s);
+  });
+  attachDrag();
+}
+function renderEffects(){
+  $("effects").textContent=
+    "bag "+bagSize()+" · lantern "+lanternSize()+" · orders "+orderSlots()+" · pay ×"+payoutMult().toFixed(2);
+}
+function newOrder(){
+  const o=ORDER_POOL[Math.floor(Math.random()*ORDER_POOL.length)];
+  return {...o, cust:CUSTOMERS[Math.floor(Math.random()*CUSTOMERS.length)]};
+}
+function bagCount(c,t){
+  let n=0; bag.forEach(it=>{if(it&&it.chain===c&&it.tier===t)n+=it.count;});
+  return n;
+}
+function canFulfill(o){return o.req.every(r=>bagCount(r.c,r.t)>=r.n);}
+function consume(c,t,n){
+  for(let i=0;i<bag.length&&n>0;i++){
+    const it=bag[i];
+    if(it&&it.chain===c&&it.tier===t){
+      const take=Math.min(n,it.count);
+      it.count-=take;n-=take;
+      if(it.count<=0) bag[i]=null;
+    }
+  }
+}
+function renderOrders(){
+  while(orders.length<orderSlots()) orders.push(newOrder());
+  while(orders.length>orderSlots()) orders.pop();
+  const el=$("orders"); el.innerHTML="";
+  orders.forEach((o,idx)=>{
+    const ready=canFulfill(o);
+    const pay=Math.round(o.pay*payoutMult());
+    const d=document.createElement("div");
+    d.className="order"+(ready?" ready":"");
+    d.innerHTML=`<div class="orow">
+      <span class="cust">${o.cust}</span>
+      <span class="wants">WANTS</span>
+      <span class="reqs">${o.req.map(r=>{
+        const have=Math.min(bagCount(r.c,r.t),r.n);
+        return `<span class="req ${have>=r.n?'ok':'no'}">${CHAINS[r.c].icons[r.t-1]}<span class="hv">${have}/${r.n}</span></span>`;
+      }).join("")}</span>
+      <span class="pay">${pay}🪙</span></div>
+      ${ready?'<div class="deliver">TAP TO DELIVER</div>':''}`;
+    tap(d,()=>{
+      if(!canFulfill(o)) return;
+      o.req.forEach(r=>consume(r.c,r.t,r.n));
+      meta.coins+=pay;
+      orders[idx]=newOrder();
+      toast("Order delivered! +"+pay+" 🪙");
+      renderBag(); renderShop(); updateHUD();
+    });
+    el.appendChild(d);
+  });
+}
+
+/* ================= RUN ================= */
+function newRun(){
+  meta.runs++;
+  run={band:1,floor:1,stam:50,maxStam:50,deepest:1,cameFrom:"down",grotto:false};
+  buildFloor();
+  showScreen("run");
+}
+function floorDims(){
+  if(run.band===2) return [7,9];
+  if(run.floor<=3) return [5,7];
+  if(run.floor<=6) return [6,8];
+  return [7,9];
+}
+function buildFloor(){
+  floorLoot={}; run.veinFound=false;
+  const [W,H]=floorDims(); run.W=W; run.H=H;
+  const N=W*H;
+  const cells=[];
+  for(let i=0;i<N;i++) cells.push({state:"covered",content:null,hard:false,blocked:false,vein:false,telegraph:null});
+  const blockedCount=(run.band===2||run.floor>=7)?3+Math.floor(Math.random()*4):0;
+  for(let b=0;b<blockedCount;b++){cells[Math.floor(Math.random()*N)].blocked=true;}
+  const es=run.cameFrom;
+  let ex,ey;
+  if(es==="down"){ex=Math.floor(W/2);ey=H-1;}
+  else if(es==="up"){ex=Math.floor(W/2);ey=0;}
+  else if(es==="left"){ex=0;ey=Math.floor(H/2);}
+  else {ex=W-1;ey=Math.floor(H/2);}
+  const eIdx=ey*W+ex;
+  cells[eIdx].blocked=false; cells[eIdx].state="dug";
+  run.pos=eIdx;
+  const free=cells.map((c,i)=>i).filter(i=>!cells[i].blocked&&i!==eIdx);
+  shuffle(free);
+  const veins=run.grotto?3:1; run.grotto=false; run.veinsLeft=veins;
+  for(let v=0;v<veins;v++) cells[free.pop()].vein=true;
+  const nT=2+Math.floor(Math.random()*3);
+  for(let t=0;t<nT&&free.length;t++){
+    const i=free.pop();
+    const kind=Math.random()<.6?"crystal":"ore";
+    cells[i].telegraph=kind;
+    cells[i].content={chain:kind,tier:(run.band===2&&Math.random()<.4)?2:1};
+  }
+  for(const i of free){
+    const r=Math.random();
+    if(r<.5) cells[i].content={chain:"pebble",tier:1};
+    else if(run.band===2&&r<.58) cells[i].content={chain:"pebble",tier:2};
+    if(run.band===2&&Math.random()<.25) cells[i].hard=true;
+  }
+  run.cells=cells;
+  renderFloor(); clearDoors();
+  $("exitrope").style.display="none";
+  $("huddepth").textContent="Floor "+run.floor+(run.band>1?" · Band "+run.band:"");
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
+function tileSize(){
+  const topH=$("top").clientHeight-60, topW=$("phone").clientWidth-70;
+  return Math.floor(Math.min(topW/run.W, topH/run.H, 52));
+}
+function renderFloor(){
+  const ts=tileSize();
+  gridEl.style.setProperty("--ts",ts+"px");
+  gridEl.style.gridTemplateColumns=`repeat(${run.W},${ts}px)`;
+  gridEl.innerHTML="";
+  const dugSet=new Set(run.cells.map((c,i)=>c.state==="dug"?i:-1).filter(i=>i>=0));
+  run.cells.forEach((c,i)=>{
+    const d=document.createElement("div");
+    d.className="tile";
+    d.style.setProperty("--ts",ts+"px");
+    if(c.blocked){d.classList.add("blocked");}
+    else if(c.state==="dug"){
+      d.classList.add("dug");
+      if(floorLoot[i]!==undefined){
+        const l=floorLoot[i];
+        d.innerHTML=`<span class="loot-chip">${CHAINS[l.chain].icons[l.tier-1]}${l.count>1?"<small style='font-size:.5em;color:#f2b632'>x"+l.count+"</small>":""}</span>`;
+        tap(d,()=>pickupFloorLoot(i));
+      }
+    } else {
+      if(c.hard) d.classList.add("hard");
+      if(isBreakable(i,dugSet)){d.classList.add("breakable"); tap(d,()=>breakTile(i));}
+      if(c.telegraph) d.innerHTML=`<span class="glint">${CHAINS[c.telegraph].icons[0]}</span>`;
+    }
+    gridEl.appendChild(d);
+  });
+  positionPlayer(ts);
+}
+function isBreakable(i,dugSet){
+  const c=run.cells[i];
+  if(c.blocked||c.state==="dug") return false;
+  const x=i%run.W,y=Math.floor(i/run.W);
+  return [[0,1],[0,-1],[1,0],[-1,0]].some(([dx,dy])=>{
+    const nx=x+dx,ny=y+dy;
+    if(nx<0||ny<0||nx>=run.W||ny>=run.H) return false;
+    return dugSet.has(ny*run.W+nx);
+  });
+}
+function positionPlayer(ts){
+  const x=run.pos%run.W,y=Math.floor(run.pos/run.W);
+  playerEl.style.left=(10+x*(ts+3)+ts*0.18)+"px";
+  playerEl.style.top =(10+y*(ts+3)+ts*0.10)+"px";
+}
+function anyAffordableMove(){
+  const dugSet=new Set(run.cells.map((c,i)=>c.state==="dug"?i:-1).filter(i=>i>=0));
+  return run.cells.some((c,i)=>isBreakable(i,dugSet)&&run.stam>=(c.hard?2:1));
+}
+function breakTile(i){
+  const c=run.cells[i];
+  const cost=c.hard?2:1;
+  if(run.stam<cost){
+    if(run.veinFound){toast("Spent. Take a door.");return;}
+    if(anyAffordableMove()){toast("Too heavy — try a softer tile");return;}
+    faint(); return;
+  }
+  run.stam-=cost;
+  c.state="dug"; run.pos=i;
+  if(c.vein){
+    run.veinsLeft--;
+    burstAt(i);
+    const n=3+Math.floor(Math.random()*3);
+    const tier=run.band===2?2:1;
+    for(let s=0;s<n;s++) addLoot("light",tier,i);
+    if(run.veinsLeft<=0){run.veinFound=true; setTimeout(openDoors,500);}
+    toast("The vein bursts with light! ✨");
+  } else if(c.content){
+    addLoot(c.content.chain,c.content.tier,i);
+  }
+  updateHUD(); renderFloor();
+  if(run.stam<=0&&!run.veinFound&&!anyAffordableMove()) setTimeout(faint,350);
+  else if(run.stam<=0&&run.veinFound) toast("Spent. Take a door before the dark closes in.");
+}
+function burstAt(i){
+  const t=gridEl.children[i]; if(!t)return;
+  const b=document.createElement("div");b.className="burst";b.textContent="✨";t.appendChild(b);
+  setTimeout(()=>b.remove(),700);
+}
+
+/* ================= LOOT ================= */
+function dropOnFloor(chain,tier,tileIdx,msg){
+  if(tileIdx===undefined) return;
+  const l=floorLoot[tileIdx];
+  if(l&&l.chain===chain&&l.tier===tier) l.count++;
+  else floorLoot[tileIdx]={chain,tier,count:1};
+  if(msg) toast(msg);
+}
+function placeLight(tier){
+  const st=lantern.findIndex(s=>s&&s.chain==="light"&&s.tier===tier&&s.count<3);
+  if(st>=0){lantern[st].count++; return true;}
+  const li=lantern.findIndex(s=>s===null);
+  if(li>=0){lantern[li]={chain:"light",tier,count:1}; return true;}
+  return false;
+}
+function addLoot(chain,tier,tileIdx){
+  if(chain==="light"){
+    if(placeLight(tier)){renderBag(); return;}
+    dropOnFloor(chain,tier,tileIdx,"Lantern full — tap a ×3 stack to merge it");
+    return;
+  }
+  const bi=bag.findIndex(s=>s===null);
+  if(bi>=0){bag[bi]={chain,tier,count:1}; renderBag(); return;}
+  dropOnFloor(chain,tier,tileIdx,"Bag full — it drops at your feet");
+}
+function pickupFloorLoot(i){
+  const l=floorLoot[i]; if(!l) return;
+  if(l.chain==="light"){
+    let moved=false;
+    while(l.count>0&&placeLight(l.tier)){l.count--;moved=true;}
+    if(l.count<=0) delete floorLoot[i];
+    if(!moved){toast("Lantern still full — tap a ×3 stack to merge");return;}
+  } else {
+    const bi=bag.findIndex(s=>s===null);
+    if(bi<0){toast("Bag still full");return;}
+    bag[bi]={chain:l.chain,tier:l.tier,count:1};
+    l.count--;
+    if(l.count<=0) delete floorLoot[i];
+  }
+  renderBag(); renderFloor();
+}
+function chipHTML(it){
+  const ch=CHAINS[it.chain];
+  const cls="chip t"+it.tier+(it.chain==="light"?" light-chip":"")+(ch.shop?" shop-chip":"");
+  return `<div class="${cls}">${ch.icons[it.tier-1]}${it.count>1?`<span class="cnt">x${it.count}</span>`:""}</div>`;
+}
+function renderBag(){
+  applySizes();
+  const bagEl=$("bag"); bagEl.innerHTML="";
+  bag.forEach((it,i)=>{
+    const s=document.createElement("div");s.className="slot";s.dataset.zone="bag";s.dataset.idx=i;
+    if(it) s.innerHTML=chipHTML(it);
+    bagEl.appendChild(s);
+  });
+  const lEl=$("lantern"); lEl.innerHTML="";
+  lantern.forEach((it,i)=>{
+    const s=document.createElement("div");s.className="slot lantern-slot";s.dataset.zone="lantern";s.dataset.idx=i;
+    if(it) s.innerHTML=chipHTML(it);
+    lEl.appendChild(s);
+  });
+  attachDrag();
+  if(screen==="shop") renderOrders();
+  updateHUD();
+}
+
+/* ================= DRAG & MERGE ================= */
+let drag=null, lastToss=null, tossTimer=null;
+function zoneArr(z){return z==="bag"?bag:z==="lantern"?lantern:shopboard;}
+function attachDrag(){
+  document.querySelectorAll(".slot .chip").forEach(ch=>{
+    ch.onpointerdown=e=>{
+      const slot=ch.parentElement;
+      drag={zone:slot.dataset.zone, idx:+slot.dataset.idx};
+      const g=$("dragghost"); g.textContent=ch.textContent.trim().slice(0,2); g.style.display="block";
+      moveGhost(e); ch.style.opacity=.35;
+      e.preventDefault();
+    };
+  });
+}
+document.addEventListener("pointermove",e=>{if(drag) moveGhost(e);});
+function moveGhost(e){
+  const g=$("dragghost"); g.style.left=(e.clientX-14)+"px"; g.style.top=(e.clientY-18)+"px";
+  document.querySelectorAll(".slot,#gutter,#till").forEach(el=>el.classList.remove("drag-over"));
+  const t=targetUnder(e); if(t&&t.el) t.el.classList.add("drag-over");
+}
+function targetUnder(e){
+  const els=document.elementsFromPoint(e.clientX,e.clientY);
+  for(const el of els){
+    if(el.id==="gutter") return {type:"gutter",el};
+    if(el.id==="till") return {type:"till",el};
+    if(el.classList&&el.classList.contains("slot")) return {type:"slot",el,zone:el.dataset.zone,idx:+el.dataset.idx};
+  }
+  return null;
+}
+document.addEventListener("pointerup",e=>{
+  if(!drag) return;
+  const t=targetUnder(e);
+  const src=drag; drag=null;
+  $("dragghost").style.display="none";
+  document.querySelectorAll(".slot,#gutter,#till").forEach(el=>el.classList.remove("drag-over"));
+  const arrS=zoneArr(src.zone);
+  const item=arrS[src.idx];
+  if(!item){renderBag();return;}
+  const isShop=!!CHAINS[item.chain].shop;
+  if(t&&t.type==="gutter"){tossItem(src);return;}
+  if(t&&t.type==="till"){sellItem(src);return;}
+  if(t&&t.type==="slot"&&t.zone===src.zone&&t.idx===src.idx){
+    const maxT=CHAINS[item.chain].names.length;
+    if(item.count>=3&&item.tier<maxT){
+      arrS[src.idx]={chain:item.chain,tier:item.tier+1,count:1};
+      toast("✦ "+CHAINS[item.chain].names[item.tier]+"! ✦");
+      if(isShop){applySizes(); if(screen==="shop") renderShop();}
+    }
+    renderBag(); if(isShop) renderShopBoard(); return;
+  }
+  if(t&&t.type==="slot"&&!(t.zone===src.zone&&t.idx===src.idx)){
+    const arrT=zoneArr(t.zone);
+    // zone rules
+    if(t.zone==="lantern"&&item.chain!=="light"){toast("Only light fits the lantern");renderBag();return;}
+    if(t.zone==="bag"&&(item.chain==="light"||isShop)){toast(isShop?"Shop fittings stay in the shop":"Light belongs in the lantern");renderBag();return;}
+    if(t.zone==="shopboard"&&!isShop){toast("Only shop fittings go on the shop board");renderBag();return;}
+    const tgt=arrT[t.idx];
+    if(!tgt){arrT[t.idx]=item;arrS[src.idx]=null;}
+    else if(tgt.chain===item.chain&&tgt.tier===item.tier){
+      const total=tgt.count+item.count;
+      const maxT=CHAINS[item.chain].names.length;
+      if(item.tier>=maxT){toast("Max tier already");renderBag();return;}
+      if(total>=3){
+        arrT[t.idx]={chain:item.chain,tier:item.tier+1,count:1};
+        arrS[src.idx]= total>3?{chain:item.chain,tier:item.tier,count:total-3}:null;
+        toast("✦ "+CHAINS[item.chain].names[item.tier]+"! ✦");
+        if(isShop) applySizes();
+      } else {tgt.count=total;arrS[src.idx]=null;}
+    }
+    else{
+      if(src.zone!==t.zone){toast("That doesn't go there");renderBag();return;}
+      arrT[t.idx]=item;arrS[src.idx]=tgt;
+    }
+  }
+  renderBag();
+  if(screen==="shop") renderShop();
+});
+function sellItem(src){
+  const arr=zoneArr(src.zone);
+  const it=arr[src.idx];
+  if(screen!=="shop"){renderBag();return;}
+  if(it.chain==="light"){toast("Light isn't for sale — it's for the city");renderBag();return;}
+  if(CHAINS[it.chain].shop){toast("Shop fittings aren't for sale");renderBag();return;}
+  const v=CHAINS[it.chain].values[it.tier-1]*it.count;
+  meta.coins+=v; arr[src.idx]=null;
+  toast("Sold for "+v+" 🪙");
+  renderBag(); renderShop(); updateHUD();
+}
+function tossItem(src){
+  const arr=zoneArr(src.zone);
+  lastToss={zone:src.zone,idx:src.idx,item:arr[src.idx]};
+  arr[src.idx]=null;
+  renderBag(); if(src.zone==="shopboard") renderShop();
+  const u=$("undo"); u.style.display="block";
+  clearTimeout(tossTimer);
+  tossTimer=setTimeout(()=>{u.style.display="none";lastToss=null;},3000);
+}
+tap($("undo"),()=>{
+  if(!lastToss) return;
+  const arr=zoneArr(lastToss.zone);
+  if(arr[lastToss.idx]===null) arr[lastToss.idx]=lastToss.item;
+  else {const i=arr.findIndex(s=>s===null); if(i>=0) arr[i]=lastToss.item;}
+  lastToss=null; $("undo").style.display="none"; renderBag();
+  if(screen==="shop") renderShop();
+});
+
+/* ================= DOORS / FLOW ================= */
+function clearDoors(){document.querySelectorAll(".door").forEach(d=>d.remove());}
+function openDoors(){
+  if(run.floor%10===0){showShaft();return;}
+  clearDoors();
+  const dirs=["up","down","left","right"].filter(d=>d!==run.cameFrom);
+  shuffle(dirs);
+  const n=2+Math.floor(Math.random()*2);
+  dirs.slice(0,n).forEach(dir=>{
+    const boon=BOONS[Math.floor(Math.random()*BOONS.length)];
+    const d=document.createElement("div");
+    d.className="door "+dir;
+    d.textContent=seenBoons.has(boon.id)?boon.icon:"❓";
+    tap(d,()=>{seenBoons.add(boon.id); goDir(dir,boon);});
+    roomEl.appendChild(d);
+  });
+  $("exitrope").style.display="block";
+}
+function goDir(dir,boon){
+  clearDoors();
+  const opposite={up:"down",down:"up",left:"right",right:"left"};
+  run.cameFrom=opposite[dir];
+  run.floor++; run.deepest=Math.max(run.deepest,run.floor);
+  boon.apply();
+  buildFloor(); updateHUD();
+}
+tap($("exitrope"),()=>endRun(true));
+function showShaft(){clearDoors(); $("shaftscreen").style.display="flex";}
+tap($("descendbtn"),()=>{
+  $("shaftscreen").style.display="none";
+  run.band=2; run.floor++; run.deepest=run.floor;
+  run.stam=Math.min(run.maxStam,run.stam+8); toast("You rest at the camp (+8 stamina)");
+  buildFloor(); updateHUD();
+});
+tap($("flaskbtn"),()=>{
+  if(meta.coins<20){toast("Not enough coins");return;}
+  meta.coins-=20; run.stam=Math.min(run.maxStam,run.stam+12); updateHUD(); toast("+12 stamina 🧪");
+});
+tap($("bankbtn"),()=>{$("shaftscreen").style.display="none"; endRun(true);});
+
+/* ================= END STATES ================= */
+function lightValue(it){return (it&&it.chain==="light")?CHAINS.light.values[it.tier-1]*it.count:0;}
+function faint(){
+  bag=bag.map(it=>(it&&it.tier===1&&!CHAINS[it.chain].shop)?null:it);
+  endRun(false);
+}
+function endRun(safe){
+  let light=0;
+  lantern.forEach(it=>{light+=lightValue(it);});
+  lantern=Array(lanternSize()).fill(null);
+  meta.light+=light;
+  const gift=2*meta.citizens;
+  meta.coins+=gift;
+  $("tallytitle").textContent= safe?"Back to the surface":"The dark takes you…";
+  $("tallysub").textContent= safe?"Your lantern empties into the city's stock.":"Raw materials scattered. Merged goods and your lantern survive.";
+  $("tlight").textContent=light+" ✨";
+  $("tgift").textContent=gift+" 🪙";
+  $("tdepth").textContent=run.deepest;
+  $("tallyscreen").style.display="flex";
+}
+tap($("homebtn"),()=>{
+  $("tallyscreen").style.display="none";
+  showScreen("city");
+});
+tap($("introbtn"),()=>{$("intro").style.display="none"; showScreen("city");});
+
+/* ================= HUD ================= */
+function updateHUD(){
+  $("hudcoins").textContent=meta.coins;
+  $("hudcitizens").textContent=meta.citizens;
+  let carried=0; lantern.forEach(it=>carried+=lightValue(it));
+  $("hudlight").textContent = screen==="run" ? (meta.light+" +"+carried) : meta.light;
+  if(run&&screen==="run"){
+    $("stamfill").style.width=Math.max(0,(run.stam/run.maxStam*100))+"%";
+    $("vignette").style.opacity=Math.min(.85,Math.max(0,1-(run.stam/run.maxStam))*.95);
+  }
+  if(screen==="city") renderLightBar();
+}
+let toastTimer=null;
+function toast(msg){
+  const t=$("toast"); t.textContent=msg; t.style.opacity=1;
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.opacity=0,1800);
+}
+window.addEventListener("resize",()=>{if(run&&screen==="run") renderFloor();});
+
+renderBag(); showScreen("city");
+</script>
+</body>
+</html>
