@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#05070b">
+<title>LUMEN Quarry — Prototype A1</title>
+<style>
+  :root{
+    --bg:#0a0d13; --frame:#12161f; --wall:#1e2534; --wall-edge:#2c3650;
+    --tile:#1a2130; --ink:#e8e4d8; --dim:#8a93a4;
+    --gold:#f2b632; --teal:#4fd6c2; --rose:#e86a7a; --line:#2a3242;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+  html{height:100%}
+  body{margin:0;position:fixed;inset:0;width:100%;height:100%;background:#05070b;
+    font:15px/1.4 'Segoe UI',system-ui,sans-serif;color:var(--ink);overflow:hidden;overscroll-behavior:none}
+  button{touch-action:manipulation}
+  #jsbadge{position:fixed;bottom:2px;left:4px;z-index:99;font-size:.6rem;color:#e86a7a;opacity:.8}
+  #jsbadge.ok{color:#4fd6c2}
+  #phone{position:relative;width:min(100vw,420px);height:100%;max-height:900px;margin:0 auto;background:var(--bg);
+    display:flex;flex-direction:column;overflow:hidden;border-left:1px solid #131824;border-right:1px solid #131824}
+
+  #hud{display:flex;align-items:center;gap:12px;padding:10px 16px 6px;font-size:.85rem;color:var(--dim)}
+  #hud .spacer{flex:1}
+  .stat{display:flex;align-items:center;gap:5px}
+  .stat b{color:var(--ink)}
+  #stamwrap{margin:0 16px 6px}
+  #stambar{height:12px;background:#1a2130;border-radius:8px;overflow:hidden;border:1px solid #2a3242}
+  #stamfill{height:100%;width:100%;background:linear-gradient(90deg,#e86a7a,#f2b632);border-radius:8px;transition:width .25s}
+  #stamtext{display:flex;justify-content:space-between;font-size:.62rem;color:var(--dim);margin-top:2px}
+
+  #top{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:12px;min-height:0;flex-direction:column;gap:8px;overflow:hidden}
+
+  /* quarry room */
+  #room{position:relative;background:var(--wall);border:6px solid var(--wall-edge);border-radius:14px;padding:8px;
+    box-shadow:0 0 40px #000 inset, 0 6px 30px #00000088}
+  #board{display:grid;gap:3px;position:relative}
+  .cell{width:var(--ts);height:var(--ts);border-radius:5px;background:var(--tile);position:relative;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 2px 0 #00000044 inset}
+  .cell.under-stone{background:transparent;box-shadow:none}
+  /* the big stone spans 2x2, absolutely placed over the grid */
+  #bigstone{position:absolute;z-index:6;border-radius:16px;cursor:pointer;
+    background:radial-gradient(circle at 35% 30%, #4a5670, #333d52 55%, #232b3d);
+    box-shadow:0 6px 14px #00000088, 0 0 0 2px #4a567055, 0 -3px 0 #ffffff14 inset;
+    display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px}
+  #bigstone:active{transform:scale(.97)}
+  #bigstone .face{font-size:2rem;filter:drop-shadow(0 2px 4px #000)}
+  #bigstone .hp{font-size:.6rem;color:var(--gold);font-weight:700;text-shadow:0 1px 2px #000}
+  #bigstone.dmg1{background:radial-gradient(circle at 35% 30%, #4a5670, #333d52 55%, #232b3d),
+    linear-gradient(105deg,transparent 48%,#0008 49%,transparent 51%);background-blend-mode:normal}
+  #bigstone.dmg1::after,#bigstone.dmg2::after,#bigstone.dmg3::after{content:"";position:absolute;inset:0;border-radius:16px;
+    background:linear-gradient(115deg,transparent 46%,#000a 48%,transparent 50%)}
+  #bigstone.dmg2::after{background:linear-gradient(115deg,transparent 46%,#000a 48%,transparent 50%),
+    linear-gradient(15deg,transparent 60%,#000a 62%,transparent 64%)}
+  #bigstone.dmg3::after{background:linear-gradient(115deg,transparent 46%,#000c 48%,transparent 50%),
+    linear-gradient(15deg,transparent 60%,#000c 62%,transparent 64%),
+    linear-gradient(75deg,transparent 30%,#000c 32%,transparent 34%)}
+  #hitbar{position:absolute;left:8px;right:8px;bottom:-2px;height:5px;background:#0a0d14;border-radius:4px;overflow:hidden}
+  #hitfill{height:100%;width:0%;background:var(--teal);transition:width .15s}
+  .spawnpop{animation:spawnpop .35s ease-out}
+  @keyframes spawnpop{0%{transform:scale(.2);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+  .hitflash{animation:hitflash .12s}
+  @keyframes hitflash{50%{filter:brightness(1.5)}}
+  .burst{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3rem;
+    animation:burst .8s ease-out forwards;pointer-events:none;z-index:8}
+  @keyframes burst{0%{transform:scale(.3);opacity:1}100%{transform:scale(2.4);opacity:0}}
+
+  /* panels */
+  .panel{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;height:100%;justify-content:center}
+  .ptitle{color:var(--gold);font-size:1.05rem;letter-spacing:.08em}
+  .psub{color:var(--dim);font-size:.75rem;margin-top:-4px;text-align:center;max-width:340px;min-height:1.1em}
+  #lightbarwrap{width:86%;max-width:330px}
+  #lightbarlabel{display:flex;justify-content:space-between;font-size:.72rem;color:var(--dim);margin-bottom:3px}
+  #lightbarlabel b{color:var(--gold)}
+  #lightbar{height:16px;background:#1a2130;border:1px solid #f2b63244;border-radius:10px;overflow:hidden}
+  #lightfill{height:100%;width:0%;background:linear-gradient(90deg,#8a6a12,#f2b632,#ffe9a8);border-radius:10px;
+    transition:width .6s;box-shadow:0 0 14px #f2b632aa}
+  #citywrap{position:relative}
+  #cityboard{display:grid;grid-template-columns:repeat(6,48px);gap:4px;background:#07090f;padding:8px;border-radius:14px;border:1px solid var(--line)}
+  .ct{width:48px;height:48px;border-radius:7px;background:#0a0d14;display:flex;align-items:center;justify-content:center;
+    font-size:1.4rem;position:relative;transition:background .6s}
+  .ct.lit{background:#2b2413;box-shadow:0 0 14px #f2b63222 inset}
+  .ct.placeable{outline:2px dashed var(--teal);cursor:pointer;animation:doorglow 1.4s infinite alternate}
+  .ct .b{filter:drop-shadow(0 0 6px #f2b63288)}
+  @keyframes doorglow{from{box-shadow:0 0 8px #f2b63244}to{box-shadow:0 0 22px #f2b632aa}}
+  .dlabel{position:absolute;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:#05070bd8;border:1px dashed #3a4356;border-radius:10px;cursor:pointer;padding:2px;text-align:center}
+  .dlabel .dn{font-size:.62rem;color:var(--dim)}
+  .dlabel .dc{font-size:.72rem;color:var(--gold);font-weight:700}
+  .dlabel.affordable{border-color:var(--gold);animation:doorglow 1.6s infinite alternate}
+  #citybtns,#quarrybtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  .cbtn{background:#0e1420;border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:9px 13px;
+    font-size:.82rem;cursor:pointer;font-family:inherit}
+  .cbtn.primary{background:var(--gold);color:#1a1408;border-color:var(--gold);font-weight:700}
+  .cbtn.active{border-color:var(--teal);color:var(--teal)}
+  .cbtn:disabled{opacity:.4}
+
+  /* shop */
+  #shoppanel{justify-content:flex-start;padding-top:4px;overflow:hidden}
+  #buyrow{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+  .buybtn{background:#0e1420;border:1px solid var(--line);border-radius:10px;padding:5px 8px;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;font-size:1.05rem;min-width:58px}
+  .buybtn small{font-size:.58rem;color:var(--dim)}
+  .buybtn .cost{font-size:.62rem;color:var(--gold);font-weight:700}
+  .buybtn:disabled{opacity:.4}
+  #shopboard{display:grid;grid-template-columns:repeat(4,42px);gap:4px;background:#07090f;padding:7px;border-radius:12px;border:1px solid var(--line)}
+  #shopboard .slot{width:42px;height:42px;aspect-ratio:auto}
+  #effects{font-size:.66rem;color:var(--teal);text-align:center}
+  #orders{display:flex;flex-direction:column;gap:6px;width:92%;max-width:350px;overflow-y:auto;flex:1;min-height:60px}
+  .order{background:#0e1420;border:1px solid var(--line);border-radius:12px;padding:7px 10px}
+  .order.ready{border-color:var(--gold);box-shadow:0 0 12px #f2b63333;cursor:pointer}
+  .orow{display:flex;align-items:center;gap:8px}
+  .order .cust{font-size:1.4rem}
+  .order .wants{font-size:.6rem;color:var(--dim)}
+  .order .reqs{flex:1;display:flex;gap:8px;align-items:center;font-size:1rem;flex-wrap:wrap}
+  .req{display:flex;align-items:center;gap:2px}
+  .req .hv{font-size:.62rem;font-weight:700}
+  .req.ok .hv{color:var(--teal)} .req.no .hv{color:var(--rose)}
+  .req.no{opacity:.6}
+  .order .pay{color:var(--gold);font-weight:700;font-size:.85rem;white-space:nowrap}
+  .deliver{margin-top:5px;text-align:center;font-size:.68rem;color:#1a1408;background:var(--gold);border-radius:8px;
+    padding:3px;font-weight:700;letter-spacing:.1em}
+  #till{width:92%;max-width:350px;height:40px;border:2px dashed #f2b63255;border-radius:12px;display:flex;align-items:center;
+    justify-content:center;color:var(--gold);font-size:.72rem;flex-shrink:0}
+  #till.drag-over{background:#f2b63218;border-color:var(--gold)}
+
+  /* BAG */
+  #bagzone{background:var(--frame);border-top:1px solid var(--line);padding:8px 14px 10px;position:relative}
+  #bag{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;max-width:300px;margin:0 auto}
+  .slot{aspect-ratio:1;background:#0e1320;border:1px solid #232c3f;border-radius:8px;position:relative;
+    display:flex;align-items:center;justify-content:center}
+  .slot.drag-over{border-color:var(--teal);box-shadow:0 0 8px #4fd6c266}
+  .chip{touch-action:none;width:88%;height:88%;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    font-size:1.25rem;cursor:grab;position:relative;background:#1c2334;box-shadow:0 2px 4px #00000066}
+  .chip.t2{background:#24304a}.chip.t3{background:#2d3d60;box-shadow:0 0 8px #4fd6c244}
+  .chip.t4{background:#3b3260;box-shadow:0 0 10px #b48ef266}.chip.t5{background:#54407a;box-shadow:0 0 12px #d2a8ff88}
+  .chip.shroom-chip{background:#2a1a2e;box-shadow:0 0 8px #e86ae288}
+  .chip.shop-chip{background:#13282a;box-shadow:0 0 8px #4fd6c244}
+  .chip .cnt{position:absolute;bottom:0;right:3px;font-size:.6rem;color:var(--gold);font-weight:700;text-shadow:0 1px 2px #000}
+  /* board item cells reuse .slot sizing via .cell — items sit inside cells */
+  .cell .chip{width:86%;height:86%;font-size:calc(var(--ts)*.5)}
+  #gutter{margin:7px auto 0;max-width:390px;height:22px;border:1px dashed #444d63;border-radius:8px;display:flex;
+    align-items:center;justify-content:center;font-size:.65rem;color:var(--dim)}
+  #gutter.drag-over{border-color:var(--rose);color:var(--rose);background:#e86a7a11}
+  #dragghost{position:fixed;z-index:100;pointer-events:none;font-size:1.5rem;filter:drop-shadow(0 2px 8px #000);display:none}
+
+  .overlay{position:absolute;inset:0;background:#05070bee;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:30px;gap:14px}
+  .overlay h2{color:var(--gold);margin:0;font-size:1.5rem}
+  .overlay p{color:var(--dim);margin:0;max-width:300px}
+  .btn{background:var(--gold);color:#1a1408;border:none;border-radius:12px;padding:12px 26px;font-size:1rem;
+    font-weight:700;cursor:pointer;font-family:inherit}
+  .btn:active{transform:scale(.96)}
+  #toast{position:absolute;top:64px;left:50%;transform:translateX(-50%);background:#0e1420ee;border:1px solid var(--gold);
+    color:var(--gold);padding:8px 18px;border-radius:20px;font-size:.85rem;z-index:30;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+  #undo{position:absolute;bottom:110px;left:50%;transform:translateX(-50%);z-index:30;background:#0e1420ee;
+    border:1px solid var(--rose);color:var(--rose);padding:6px 16px;border-radius:18px;font-size:.8rem;cursor:pointer;display:none}
+</style>
+</head>
+<body>
+<div id="jsbadge">A1 js:✗</div>
+<div id="phone">
+  <div id="hud">
+    <div class="stat">✨ <b id="hudlight">0</b></div>
+    <div class="stat">🪙 <b id="hudcoins">0</b></div>
+    <div class="stat">🧑 <b id="hudcitizens">0</b></div>
+    <div class="spacer"></div>
+    <div class="stat" id="huddepth">Floor 1</div>
+  </div>
+  <div id="stamwrap">
+    <div id="stambar"><div id="stamfill"></div></div>
+    <div id="stamtext"><span id="stamnum">100/100</span><span id="regentimer">next +10 in 10:00</span></div>
+  </div>
+
+  <div id="top">
+    <!-- QUARRY -->
+    <div id="quarrypanel" class="panel">
+      <div id="room">
+        <div id="board"></div>
+        <div id="bigstone">
+          <span class="face">🗿</span>
+          <span class="hp" id="hittext">0 / 1000</span>
+          <div id="hitbar"><div id="hitfill"></div></div>
+        </div>
+      </div>
+      <div class="psub" id="quarrysub">Tap the great stone. Merge what it sheds. Bag what you keep.</div>
+      <div id="quarrybtns">
+        <button class="cbtn" id="q_shopbtn">🛍 Shop</button>
+        <button class="cbtn" id="q_citybtn">🏙 City</button>
+      </div>
+    </div>
+
+    <!-- CITY -->
+    <div id="citypanel" class="panel" style="display:none">
+      <div class="ptitle">THE CITY</div>
+      <div id="lightbarwrap">
+        <div id="lightbarlabel"><span>LIGHT</span><span id="lightbartext"><b>0</b></span></div>
+        <div id="lightbar"><div id="lightfill"></div></div>
+      </div>
+      <div id="citywrap"><div id="cityboard"></div></div>
+      <div class="psub" id="citysub"></div>
+      <div id="citybtns">
+        <button class="cbtn" id="housebtn">🏠 House <span style="color:var(--gold)">60🪙</span></button>
+        <button class="cbtn" id="c_shopbtn">🛍 Shop</button>
+        <button class="cbtn primary" id="c_quarrybtn">⛏ To the Quarry</button>
+      </div>
+    </div>
+
+    <!-- SHOP -->
+    <div id="shoppanel" class="panel" style="display:none">
+      <div class="ptitle">YOUR SHOP</div>
+      <div id="buyrow"></div>
+      <div id="shopboard"></div>
+      <div id="effects"></div>
+      <div id="orders"></div>
+      <div id="till">— drag an item here to sell —</div>
+      <button class="cbtn" id="backbtn" style="flex-shrink:0">← Back</button>
+    </div>
+  </div>
+
+  <div id="bagzone">
+    <div id="bag"></div>
+    <div id="gutter">— drag here to toss —</div>
+  </div>
+
+  <div id="toast"></div>
+  <button id="undo">undo toss</button>
+  <div id="dragghost"></div>
+
+  <div class="overlay" id="intro">
+    <h2>LUMEN — Quarry</h2>
+    <p>The great stone holds the light. Chip it, merge what falls, and break it open — floor by floor.</p>
+    <p style="font-size:.78rem">Every tap costs 1 stamina. Stamina rests back +10 every 10 minutes — or eat an energy mushroom 🍄 when the stone sheds one. Break the stone to earn a shard of light ✨.</p>
+    <button class="btn" id="introbtn">Begin</button>
+  </div>
+
+  <div class="overlay" id="breakscreen" style="display:none">
+    <h2>💥 The stone breaks!</h2>
+    <p id="breaksub"></p>
+    <div style="font-size:2.5rem">✨</div>
+    <button class="btn" id="nextfloorbtn">⬇ Deeper — next stone</button>
+  </div>
+
+  <div class="overlay" id="winscreen" style="display:none">
+    <h2>☀️ The city glows again</h2>
+    <p id="winsub"></p>
+    <button class="btn" id="winbtn">Keep playing</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============ TUNABLES (David: twist freely) ============ */
+const HITS_BASE=1000;          // hits to break the floor-1 stone
+const HITS_STEP=500;           // extra hits per floor
+const STAM_MAX=100;
+const REGEN_SECONDS=600;       // +10 stamina every 10 minutes
+const REGEN_AMOUNT=10;
+const SHROOM_RESTORE=25;
+const SPAWN={stone:.55, stone2:.04, ore:.12, shroom:.02}; // per tap; rest = dust (nothing)
+const DISTRICT_COSTS=[0,1,3,5,8]; // simplified light economy — total 17✨ = 17 broken stones
+const HOUSE_COST=60, GIFT_PER_CITIZEN=2; // gift paid on each stone break
+
+/* ============ DATA ============ */
+const CHAINS={
+  pebble:{names:["Pebble","Brick","Pillar","Monument","Spire"], icons:["🪨","🧱","🏛️","🗿","🗼"], values:[1,4,14,50,180]},
+  ore:{names:["Ore","Ingot","Blade"], icons:["⚙️","🔩","⚔️"], values:[4,14,50]},
+  shroom:{names:["Energy Mushroom"], icons:["🍄"], values:[2], eat:true},
+  sign:{shop:true, cost:25, names:["Sign","Fancy Sign","Famous Sign"], icons:["🪧","🎏","🎇"], values:[0,0,0]},
+  bell:{shop:true, cost:35, names:["Bell","Chime","Grand Horn"], icons:["🛎️","🔔","📯"], values:[0,0,0]},
+  toolkit:{shop:true, cost:45, names:["Toolkit","Workbench","Warehouse"], icons:["🧰","🪚","🏗️"], values:[0,0,0]},
+  pick:{shop:true, cost:55, names:["Pick","Steel Pick","Star Pick"], icons:["⛏️","🔨","💥"], values:[0,0,0]},
+};
+const SHOP_KEYS=["sign","bell","toolkit","pick"];
+const EFFECT_HINT={sign:"+15% order pay / tier", bell:"+1 order slot / tier", toolkit:"+2 bag slots / tier", pick:"+1 hit per tap / tier"};
+const CUSTOMERS=["👵","🧑‍🌾","🧙","👦","🎻","🐈"];
+const ORDER_POOL=[
+  {req:[{c:"pebble",t:1,n:3}],pay:8},
+  {req:[{c:"pebble",t:2,n:1}],pay:18},
+  {req:[{c:"ore",t:1,n:2}],pay:14},
+  {req:[{c:"ore",t:2,n:1}],pay:38},
+  {req:[{c:"pebble",t:2,n:1},{c:"ore",t:1,n:1}],pay:28},
+  {req:[{c:"pebble",t:3,n:1}],pay:55},
+  {req:[{c:"ore",t:2,n:1},{c:"pebble",t:2,n:1}],pay:70},
+];
+const CW=6,CH=5,GATE=27;
+const DISTRICTS=[
+  {name:"Gate Plaza", tiles:[14,15,20,21,26,27]},
+  {name:"Old Market", tiles:[12,13,18,19,24,25]},
+  {name:"Lamplighters Row", tiles:[16,17,22,23,28,29]},
+  {name:"Artisan Terrace", tiles:[0,1,2,6,7,8]},
+  {name:"Cathedral of Dawn", tiles:[3,4,5,9,10,11]},
+];
+DISTRICTS.forEach((d,i)=>d.cost=DISTRICT_COSTS[i]);
+
+/* ============ STATE ============ */
+const meta={light:0,coins:0,citizens:0,unlocked:new Set([0]),buildings:{},stonesBroken:0};
+meta.buildings[GATE]="gate";
+let stam=STAM_MAX, regenLeft=REGEN_SECONDS;
+let floor=1, hits=0;
+const BW=7,BH=7;                       // quarry board 7x7
+const STONE_CELLS=[/*2x2 center*/];    // computed below
+{const cx=Math.floor(BW/2)-1, cy=Math.floor(BH/2)-1;
+ STONE_CELLS.push(cy*BW+cx,cy*BW+cx+1,(cy+1)*BW+cx,(cy+1)*BW+cx+1);}
+let board=Array(BW*BH).fill(null);     // items on quarry floor
+let bag=Array(12).fill(null);
+let shopboard=Array(12).fill(null);
+let orders=[];
+let buildMode=null, screen="quarry", won=false;
+
+const $=id=>document.getElementById(id);
+
+/* ============ TAP HELPER (mobile-safe) ============ */
+function tap(el,fn){
+  let lock=false;
+  const fire=e=>{if(lock)return; lock=true; setTimeout(()=>lock=false,350); fn(e);};
+  el.addEventListener("pointerup",e=>{e.preventDefault();fire(e);});
+  el.addEventListener("touchend",e=>{e.preventDefault();fire(e);},{passive:false});
+  el.addEventListener("click",fire);
+}
+document.addEventListener("touchmove",e=>{
+  if(!e.target.closest||!e.target.closest("#orders")) e.preventDefault();
+},{passive:false});
+window.addEventListener("error",e=>{
+  try{const t=$("toast");t.textContent="⚠ "+e.message;t.style.opacity=1;}catch(_){}
+});
+$("jsbadge").textContent="A1 js:✓"; $("jsbadge").classList.add("ok");
+
+/* ============ SHOP EFFECTS ============ */
+function maxTier(chain){let m=0;shopboard.forEach(it=>{if(it&&it.chain===chain)m=Math.max(m,it.tier);});return m;}
+function bagSize(){return 12+2*maxTier("toolkit");}
+function orderSlots(){return 2+maxTier("bell");}
+function payoutMult(){return 1+0.15*maxTier("sign");}
+function hitsPerTap(){return 1+maxTier("pick");}
+function applySizes(){while(bag.length<bagSize())bag.push(null);}
+
+/* ============ STAMINA ============ */
+function hitsTarget(){return HITS_BASE+HITS_STEP*(floor-1);}
+function spendStam(n){
+  if(stam<n) return false;
+  stam-=n; updateStam(); return true;
+}
+function gainStam(n,msg){stam=Math.min(STAM_MAX,stam+n); updateStam(); if(msg)toast(msg);}
+function updateStam(){
+  $("stamfill").style.width=(stam/STAM_MAX*100)+"%";
+  $("stamnum").textContent=stam+"/"+STAM_MAX;
+}
+setInterval(()=>{
+  regenLeft--;
+  if(regenLeft<=0){regenLeft=REGEN_SECONDS; if(stam<STAM_MAX) gainStam(REGEN_AMOUNT,"You feel rested (+"+REGEN_AMOUNT+" stamina)");}
+  const m=Math.floor(regenLeft/60), s=regenLeft%60;
+  $("regentimer").textContent= stam>=STAM_MAX ? "rested" : "next +"+REGEN_AMOUNT+" in "+m+":"+String(s).padStart(2,"0");
+},1000);
+/* dev cheat: triple-tap the stamina bar to refill */
+let cheatTaps=[], CHEAT_WINDOW=700;
+tap($("stamwrap"),()=>{
+  const now=performance.now();
+  cheatTaps=cheatTaps.filter(t=>now-t<CHEAT_WINDOW); cheatTaps.push(now);
+  if(cheatTaps.length>=3){cheatTaps=[]; stam=STAM_MAX; updateStam(); toast("🧪 dev: stamina refilled");}
+});
+
+/* ============ SCREENS ============ */
+function showScreen(s){
+  screen=s;
+  $("quarrypanel").style.display=s==="quarry"?"flex":"none";
+  $("citypanel").style.display=s==="city"?"flex":"none";
+  $("shoppanel").style.display=s==="shop"?"flex":"none";
+  $("huddepth").textContent=s==="quarry"?("Floor "+floor):(s==="shop"?"🛍":"🏙");
+  if(s==="city")renderCity();
+  if(s==="shop")renderShop();
+  if(s==="quarry")renderBoard();
+  updateHUD();
+}
+tap($("q_shopbtn"),()=>showScreen("shop"));
+tap($("q_citybtn"),()=>showScreen("city"));
+tap($("c_shopbtn"),()=>showScreen("shop"));
+tap($("c_quarrybtn"),()=>showScreen("quarry"));
+tap($("backbtn"),()=>showScreen("quarry"));
+tap($("introbtn"),()=>{$("intro").style.display="none"; showScreen("quarry");});
+
+/* ============ QUARRY BOARD ============ */
+function tileSize(){
+  const topH=$("top").clientHeight-110, topW=$("phone").clientWidth-70;
+  return Math.floor(Math.min(topW/BW, topH/BH, 50));
+}
+function renderBoard(){
+  const ts=tileSize();
+  const b=$("board");
+  b.style.setProperty("--ts",ts+"px");
+  b.style.gridTemplateColumns=`repeat(${BW},${ts}px)`;
+  b.innerHTML="";
+  for(let i=0;i<BW*BH;i++){
+    const c=document.createElement("div");
+    c.className="cell"+(STONE_CELLS.includes(i)?" under-stone":"");
+    c.style.setProperty("--ts",ts+"px");
+    c.dataset.zone="board"; c.dataset.idx=i;
+    if(!STONE_CELLS.includes(i)){c.classList.add("slot");}
+    const it=board[i];
+    if(it&&!STONE_CELLS.includes(i)) c.innerHTML=chipHTML(it);
+    b.appendChild(c);
+  }
+  // position big stone over the 2x2
+  const cx=STONE_CELLS[0]%BW, cy=Math.floor(STONE_CELLS[0]/BW);
+  const st=$("bigstone");
+  st.style.left=(8+cx*(ts+3))+"px";
+  st.style.top =(8+cy*(ts+3))+"px";
+  st.style.width=(2*ts+3)+"px";
+  st.style.height=(2*ts+3)+"px";
+  updateStone();
+  attachDrag();
+}
+function updateStone(){
+  const tgt=hitsTarget(), pct=hits/tgt;
+  $("hittext").textContent=hits+" / "+tgt;
+  $("hitfill").style.width=(pct*100)+"%";
+  const st=$("bigstone");
+  st.classList.remove("dmg1","dmg2","dmg3");
+  if(pct>.75)st.classList.add("dmg3");
+  else if(pct>.5)st.classList.add("dmg2");
+  else if(pct>.25)st.classList.add("dmg1");
+}
+function freeBoardCells(){
+  return board.map((it,i)=>(!it&&!STONE_CELLS.includes(i))?i:-1).filter(i=>i>=0);
+}
+tap($("bigstone"),()=>{
+  if(!spendStam(1)){toast("Exhausted — eat a 🍄 or rest");return;}
+  const st=$("bigstone"); st.classList.remove("hitflash"); void st.offsetWidth; st.classList.add("hitflash");
+  hits+=hitsPerTap();
+  // spawn attempt
+  const free=freeBoardCells();
+  if(free.length){
+    const r=Math.random();
+    let item=null;
+    if(r<SPAWN.shroom) item={chain:"shroom",tier:1,count:1};
+    else if(r<SPAWN.shroom+SPAWN.ore) item={chain:"ore",tier:1,count:1};
+    else if(r<SPAWN.shroom+SPAWN.ore+SPAWN.stone2 && floor>=2) item={chain:"pebble",tier:2,count:1};
+    else if(r<SPAWN.shroom+SPAWN.ore+SPAWN.stone2+SPAWN.stone) item={chain:"pebble",tier:1,count:1};
+    if(item){
+      const idx=free[Math.floor(Math.random()*free.length)];
+      board[idx]=item;
+      renderCellOnly(idx,true);
+    }
+  }
+  if(hits>=hitsTarget()){breakStone();return;}
+  updateStone();
+});
+function renderCellOnly(idx,pop){
+  const cell=$("board").children[idx];
+  if(!cell)return;
+  const it=board[idx];
+  cell.innerHTML=it?chipHTML(it):"";
+  if(it&&pop){const ch=cell.querySelector(".chip"); if(ch)ch.classList.add("spawnpop");}
+  attachDrag();
+}
+function breakStone(){
+  meta.light+=1;
+  meta.stonesBroken++;
+  const gift=GIFT_PER_CITIZEN*meta.citizens;
+  meta.coins+=gift;
+  const st=$("bigstone");
+  const bs=document.createElement("div");bs.className="burst";bs.textContent="💥";st.appendChild(bs);
+  setTimeout(()=>bs.remove(),800);
+  $("breaksub").textContent="Floor "+floor+" cleared. +1 ✨"+(gift?(" · citizens gift "+gift+"🪙"):"")+
+    (floor>=2?"":" — the next stone is tougher.");
+  setTimeout(()=>{$("breakscreen").style.display="flex";},500);
+}
+tap($("nextfloorbtn"),()=>{
+  $("breakscreen").style.display="none";
+  floor++; hits=0;
+  updateStone(); updateHUD();
+  toast("Floor "+floor+" — "+hitsTarget()+" hits to break");
+  if(!won&&meta.unlocked.size===DISTRICTS.length){/* win handled at unlock */}
+});
+
+/* ============ ITEMS / CHIPS ============ */
+function chipHTML(it){
+  const ch=CHAINS[it.chain];
+  const cls="chip t"+it.tier+(ch.shop?" shop-chip":"")+(it.chain==="shroom"?" shroom-chip":"");
+  return `<div class="${cls}">${ch.icons[it.tier-1]}${it.count>1?`<span class="cnt">x${it.count}</span>`:""}</div>`;
+}
+function renderBag(){
+  applySizes();
+  const el=$("bag"); el.innerHTML="";
+  bag.forEach((it,i)=>{
+    const s=document.createElement("div");s.className="slot";s.dataset.zone="bag";s.dataset.idx=i;
+    if(it)s.innerHTML=chipHTML(it);
+    el.appendChild(s);
+  });
+  attachDrag();
+  if(screen==="shop")renderOrders();
+  updateHUD();
+}
+
+/* ============ DRAG & MERGE (board / bag / shopboard) ============ */
+let drag=null,lastToss=null,tossTimer=null;
+function zoneArr(z){return z==="bag"?bag:z==="board"?board:shopboard;}
+function attachDrag(){
+  document.querySelectorAll(".slot .chip, .cell .chip").forEach(ch=>{
+    ch.onpointerdown=e=>{
+      const slot=ch.parentElement;
+      if(slot.dataset.zone===undefined)return;
+      drag={zone:slot.dataset.zone, idx:+slot.dataset.idx};
+      const g=$("dragghost"); g.textContent=ch.textContent.trim().slice(0,2); g.style.display="block";
+      moveGhost(e); ch.style.opacity=.35;
+      e.preventDefault();
+    };
+  });
+}
+document.addEventListener("pointermove",e=>{if(drag)moveGhost(e);});
+function moveGhost(e){
+  const g=$("dragghost"); g.style.left=(e.clientX-14)+"px"; g.style.top=(e.clientY-18)+"px";
+  document.querySelectorAll(".slot,#gutter,#till").forEach(el=>el.classList.remove("drag-over"));
+  const t=targetUnder(e); if(t&&t.el)t.el.classList.add("drag-over");
+}
+function targetUnder(e){
+  const els=document.elementsFromPoint(e.clientX,e.clientY);
+  for(const el of els){
+    if(el.id==="gutter")return{type:"gutter",el};
+    if(el.id==="till")return{type:"till",el};
+    if(el.classList&&(el.classList.contains("slot"))&&el.dataset.zone!==undefined)
+      return{type:"slot",el,zone:el.dataset.zone,idx:+el.dataset.idx};
+  }
+  return null;
+}
+document.addEventListener("pointerup",e=>{
+  if(!drag)return;
+  const t=targetUnder(e);
+  const src=drag; drag=null;
+  $("dragghost").style.display="none";
+  document.querySelectorAll(".slot,#gutter,#till").forEach(el=>el.classList.remove("drag-over"));
+  const arrS=zoneArr(src.zone);
+  const item=arrS[src.idx];
+  if(!item){refresh();return;}
+  const isShop=!!CHAINS[item.chain].shop;
+  if(t&&t.type==="gutter"){tossItem(src);return;}
+  if(t&&t.type==="till"){sellItem(src);return;}
+  if(t&&t.type==="slot"&&t.zone===src.zone&&t.idx===src.idx){
+    // tap-in-place: eat mushroom, or merge a full stack
+    if(item.chain==="shroom"){arrS[src.idx]=null; gainStam(SHROOM_RESTORE,"🍄 +"+SHROOM_RESTORE+" stamina"); refresh(); return;}
+    const maxT=CHAINS[item.chain].names.length;
+    if(item.count>=3&&item.tier<maxT){
+      arrS[src.idx]={chain:item.chain,tier:item.tier+1,count:1};
+      toast("✦ "+CHAINS[item.chain].names[item.tier]+"! ✦");
+      if(isShop)applySizes();
+    }
+    refresh(); return;
+  }
+  if(t&&t.type==="slot"&&!(t.zone===src.zone&&t.idx===src.idx)){
+    const arrT=zoneArr(t.zone);
+    if(t.zone==="board"&&STONE_CELLS.includes(t.idx)){refresh();return;}
+    if(t.zone==="shopboard"&&!isShop){toast("Only shop fittings go there");refresh();return;}
+    if(t.zone!=="shopboard"&&isShop){toast("Shop fittings stay in the shop");refresh();return;}
+    const tgt=arrT[t.idx];
+    if(!tgt){arrT[t.idx]=item;arrS[src.idx]=null;}
+    else if(tgt.chain===item.chain&&tgt.tier===item.tier){
+      const total=tgt.count+item.count;
+      const maxT=CHAINS[item.chain].names.length;
+      if(item.tier>=maxT&&item.chain!=="shroom"){toast("Max tier already");refresh();return;}
+      if(item.chain==="shroom"){tgt.count=total;arrS[src.idx]=null;} // mushrooms just stack
+      else if(total>=3){
+        arrT[t.idx]={chain:item.chain,tier:item.tier+1,count:1};
+        arrS[src.idx]=total>3?{chain:item.chain,tier:item.tier,count:total-3}:null;
+        toast("✦ "+CHAINS[item.chain].names[item.tier]+"! ✦");
+        if(isShop)applySizes();
+      } else {tgt.count=total;arrS[src.idx]=null;}
+    }
+    else if(src.zone===t.zone){arrT[t.idx]=item;arrS[src.idx]=tgt;}
+    else {refresh();return;}
+  }
+  refresh();
+});
+function refresh(){
+  renderBag();
+  if(screen==="quarry")renderBoard();
+  if(screen==="shop")renderShop();
+}
+function sellItem(src){
+  if(screen!=="shop"){refresh();return;}
+  const arr=zoneArr(src.zone);
+  const it=arr[src.idx];
+  if(CHAINS[it.chain].shop){toast("Fittings aren't for sale");refresh();return;}
+  const v=CHAINS[it.chain].values[it.tier-1]*it.count;
+  meta.coins+=v; arr[src.idx]=null;
+  toast("Sold for "+v+" 🪙"); refresh(); updateHUD();
+}
+function tossItem(src){
+  const arr=zoneArr(src.zone);
+  lastToss={zone:src.zone,idx:src.idx,item:arr[src.idx]};
+  arr[src.idx]=null; refresh();
+  const u=$("undo"); u.style.display="block";
+  clearTimeout(tossTimer); tossTimer=setTimeout(()=>{u.style.display="none";lastToss=null;},3000);
+}
+tap($("undo"),()=>{
+  if(!lastToss)return;
+  const arr=zoneArr(lastToss.zone);
+  if(arr[lastToss.idx]===null)arr[lastToss.idx]=lastToss.item;
+  else{const i=arr.findIndex(s=>s===null); if(i>=0)arr[i]=lastToss.item;}
+  lastToss=null; $("undo").style.display="none"; refresh();
+});
+
+/* ============ SHOP ============ */
+function renderShop(){renderBuyRow();renderShopBoard();renderEffects();renderOrders();}
+function renderBuyRow(){
+  const el=$("buyrow"); el.innerHTML="";
+  SHOP_KEYS.forEach(k=>{
+    const ch=CHAINS[k];
+    const b=document.createElement("button");
+    b.className="buybtn"; b.disabled=meta.coins<ch.cost;
+    b.innerHTML=`${ch.icons[0]}<small>${EFFECT_HINT[k]}</small><span class="cost">${ch.cost}🪙</span>`;
+    tap(b,()=>{
+      const si=shopboard.findIndex(s=>s===null);
+      if(si<0){toast("Shop board full — merge things");return;}
+      if(meta.coins<ch.cost)return;
+      meta.coins-=ch.cost;
+      shopboard[si]={chain:k,tier:1,count:1};
+      toast(ch.names[0]+" placed — buy 3 and merge!");
+      refresh(); updateHUD();
+    });
+    el.appendChild(b);
+  });
+}
+function renderShopBoard(){
+  const el=$("shopboard"); el.innerHTML="";
+  shopboard.forEach((it,i)=>{
+    const s=document.createElement("div");s.className="slot";s.dataset.zone="shopboard";s.dataset.idx=i;
+    if(it)s.innerHTML=chipHTML(it);
+    el.appendChild(s);
+  });
+  attachDrag();
+}
+function renderEffects(){
+  $("effects").textContent="bag "+bagSize()+" · orders "+orderSlots()+" · pay ×"+payoutMult().toFixed(2)+" · "+hitsPerTap()+" hit/tap";
+}
+function newOrder(){
+  const o=ORDER_POOL[Math.floor(Math.random()*ORDER_POOL.length)];
+  return {...o,cust:CUSTOMERS[Math.floor(Math.random()*CUSTOMERS.length)]};
+}
+function bagCount(c,t){let n=0;bag.forEach(it=>{if(it&&it.chain===c&&it.tier===t)n+=it.count;});return n;}
+function canFulfill(o){return o.req.every(r=>bagCount(r.c,r.t)>=r.n);}
+function consume(c,t,n){
+  for(let i=0;i<bag.length&&n>0;i++){
+    const it=bag[i];
+    if(it&&it.chain===c&&it.tier===t){const take=Math.min(n,it.count);it.count-=take;n-=take;if(it.count<=0)bag[i]=null;}
+  }
+}
+function renderOrders(){
+  while(orders.length<orderSlots())orders.push(newOrder());
+  while(orders.length>orderSlots())orders.pop();
+  const el=$("orders"); el.innerHTML="";
+  orders.forEach((o,idx)=>{
+    const ready=canFulfill(o);
+    const pay=Math.round(o.pay*payoutMult());
+    const d=document.createElement("div");
+    d.className="order"+(ready?" ready":"");
+    d.innerHTML=`<div class="orow"><span class="cust">${o.cust}</span><span class="wants">WANTS</span>
+      <span class="reqs">${o.req.map(r=>{
+        const have=Math.min(bagCount(r.c,r.t),r.n);
+        return `<span class="req ${have>=r.n?'ok':'no'}">${CHAINS[r.c].icons[r.t-1]}<span class="hv">${have}/${r.n}</span></span>`;
+      }).join("")}</span>
+      <span class="pay">${pay}🪙</span></div>
+      ${ready?'<div class="deliver">TAP TO DELIVER</div>':''}`;
+    tap(d,()=>{
+      if(!canFulfill(o))return;
+      o.req.forEach(r=>consume(r.c,r.t,r.n));
+      meta.coins+=pay;
+      orders[idx]=newOrder();
+      toast("Order delivered! +"+pay+" 🪙");
+      refresh(); updateHUD();
+    });
+    el.appendChild(d);
+  });
+}
+
+/* ============ CITY ============ */
+function tileUnlocked(i){return DISTRICTS.some((d,di)=>meta.unlocked.has(di)&&d.tiles.includes(i));}
+function nextCheapest(){
+  let best=null;
+  DISTRICTS.forEach((d,di)=>{if(!meta.unlocked.has(di)&&(best===null||d.cost<DISTRICTS[best].cost))best=di;});
+  return best;
+}
+function renderLightBar(){
+  const nb=nextCheapest();
+  if(nb===null){$("lightbartext").innerHTML="<b>"+meta.light+" ✨</b> — the whole city shines";$("lightfill").style.width="100%";}
+  else{
+    const cost=DISTRICTS[nb].cost;
+    $("lightbartext").innerHTML="<b>"+meta.light+"</b> / "+cost+" ✨ — next: "+DISTRICTS[nb].name;
+    $("lightfill").style.width=Math.min(100,meta.light/cost*100)+"%";
+  }
+}
+function renderCity(){
+  renderLightBar();
+  const el=$("cityboard"); el.innerHTML="";
+  for(let i=0;i<CW*CH;i++){
+    const d=document.createElement("div");
+    const unlocked=tileUnlocked(i);
+    d.className="ct"+(unlocked?" lit":"");
+    const b=meta.buildings[i];
+    if(b==="gate")d.innerHTML='<span class="b">⛩️</span>';
+    if(b==="house")d.innerHTML='<span class="b">🏠</span>';
+    if(buildMode==="house"&&unlocked&&!b){d.classList.add("placeable"); tap(d,()=>placeHouse(i));}
+    el.appendChild(d);
+  }
+  document.querySelectorAll(".dlabel").forEach(l=>l.remove());
+  const wrap=$("citywrap");
+  DISTRICTS.forEach((dst,di)=>{
+    if(meta.unlocked.has(di))return;
+    const xs=dst.tiles.map(i=>i%CW), ys=dst.tiles.map(i=>Math.floor(i/CW));
+    const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+    const cell=52;
+    const lab=document.createElement("div");
+    lab.className="dlabel"+(meta.light>=dst.cost?" affordable":"");
+    lab.style.left=(8+x0*cell)+"px"; lab.style.top=(8+y0*cell)+"px";
+    lab.style.width=((x1-x0+1)*cell-4)+"px"; lab.style.height=((y1-y0+1)*cell-4)+"px";
+    lab.innerHTML=`<span class="dn">🔒 ${dst.name}</span><span class="dc">${dst.cost} ✨</span>`;
+    tap(lab,()=>unlockDistrict(di));
+    wrap.appendChild(lab);
+  });
+  $("housebtn").classList.toggle("active",buildMode==="house");
+  $("housebtn").disabled=meta.coins<HOUSE_COST;
+  $("citysub").textContent= buildMode==="house"?"Tap glowing ground to build. Each house brings one citizen home."
+    : meta.citizens>0? meta.citizens+" citizen"+(meta.citizens>1?"s":"")+" home — they gift "+(GIFT_PER_CITIZEN*meta.citizens)+"🪙 each time a stone breaks."
+    : "Unlock districts with light ✨. One shard per broken stone.";
+}
+function unlockDistrict(di){
+  const d=DISTRICTS[di];
+  if(meta.light<d.cost){toast("Needs "+d.cost+" ✨ — you have "+meta.light);return;}
+  meta.light-=d.cost;
+  meta.unlocked.add(di);
+  toast("☀️ "+d.name+" awakens!");
+  renderCity(); updateHUD();
+  if(!won&&meta.unlocked.size===DISTRICTS.length){
+    won=true;
+    $("winsub").textContent="Rebuilt after "+meta.stonesBroken+" broken stones, with "+meta.citizens+" citizens home.";
+    setTimeout(()=>$("winscreen").style.display="flex",700);
+  }
+}
+function placeHouse(i){
+  if(meta.coins<HOUSE_COST)return;
+  meta.coins-=HOUSE_COST; meta.citizens++;
+  meta.buildings[i]="house";
+  buildMode=null; toast("A citizen returns home 🧑"); renderCity(); updateHUD();
+}
+tap($("housebtn"),()=>{buildMode=buildMode==="house"?null:"house"; renderCity();});
+tap($("winbtn"),()=>$("winscreen").style.display="none");
+
+/* ============ HUD ============ */
+function updateHUD(){
+  $("hudcoins").textContent=meta.coins;
+  $("hudcitizens").textContent=meta.citizens;
+  $("hudlight").textContent=meta.light;
+  if(screen==="city")renderLightBar();
+}
+let toastTimer=null;
+function toast(msg){
+  const t=$("toast"); t.textContent=msg; t.style.opacity=1;
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.opacity=0,1800);
+}
+window.addEventListener("resize",()=>{if(screen==="quarry")renderBoard();});
+
+renderBag(); updateStam(); showScreen("quarry");
+</script>
+</body>
+</html>
